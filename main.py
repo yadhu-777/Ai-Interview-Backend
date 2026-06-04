@@ -352,3 +352,47 @@ async def quick_prep(payload: QuickPrepRequest):
         return {"msg": chat.choices[0].message.content}
     except Exception as e:
         return {"msg": str(e)}
+    
+
+
+
+class FeedbackRequest(BaseModel):
+    convo: list
+    domainText: str
+
+@app.post("/feedback")
+async def feedback(payload: FeedbackRequest):
+    try:
+        import json
+
+        if not payload.convo:
+            return {"feedback": "No conversation recorded.", "rating": 0}
+
+        # Format convo into a readable transcript for OpenAI
+        transcript = ""
+        for turn in payload.convo:
+            if turn.get("ai"):
+                transcript += f"Interviewer: {turn['ai']}\n"
+            if turn.get("user"):
+                transcript += f"Candidate: {turn['user']}\n"
+
+        chat = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert interview coach."
+                },
+                {
+                    "role": "user",
+                    "content": f"Domain: {payload.domainText}\n\nInterview Transcript:\n{transcript}\n\nScore the candidate out of 10 and give feedback. Respond ONLY in JSON: {{\"feedback\": \"...\", \"rating\": 7}}"
+                }
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        result = json.loads(chat.choices[0].message.content)
+        return result
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)    
